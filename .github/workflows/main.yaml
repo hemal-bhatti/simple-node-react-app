@@ -110,7 +110,7 @@ jobs:
               shell: |
                 export NVM_DIR="/home/ubuntu/.nvm"
                 [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                cd /var/www/app/backend
+                cd /var/www/simple-node-react/simple-backend
                 pm2 restart ecosystem.config.js --update-env
               args:
                 executable: /bin/bash
