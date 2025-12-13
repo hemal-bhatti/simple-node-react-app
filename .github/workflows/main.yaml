@@ -109,14 +109,27 @@ jobs:
               args:
                 executable: /bin/bash
 
-            - name: run a script file
-              become_user: ubuntu
-              shell: |
-                cd "/home/ubuntu/hemal"
-                sudo bash script.sh
         EOF
 
         ansible-playbook -i inventory.ini deploy-playbook.yml
+
+    # Step 7.1: create ami of this temp server
+    - name: create a ami from this temp temp_server
+      run: |
+        AMI_ID=$(aws ec2 create-image \
+          --instance-id i-07faed5b39659712b \
+          --name "simple-node-react-app-ami" \
+          --no-reboot \
+          --query 'ImageId' \
+          --output text)
+        echo "AMI ID: $AMI_ID"
+        echo "ami_id=$AMI_ID" >> $GITHUB_ENV
+
+      # attach a this ami to launch template
+    - name: Attach AMI to launch template 
+      run: |
+        echo $GITHUB_ENV
+        
 
 
 
