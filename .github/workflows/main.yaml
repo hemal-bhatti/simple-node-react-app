@@ -45,7 +45,74 @@ jobs:
         node --version
         npm --version
     
-    # Step 6: Fetch EC2 instances (Auto Scaling Group instances)
+    # 6. fetch temp server using AWS CLI
+    - name: Fetch temporary server details
+      run: |
+        echo "[temp_server]" > inventory.ini
+        aws ec2 describe-instances \
+        --region ap-south-1 \ 
+        --instance-ids i-07faed5b39659712b \
+        --query 'Reservations[*].Instances[*].PublicIpAddress' \
+        --output text >> inventory.ini
+
+    - name: Set up Ansible inventory file
+      run: |
+        cat inventory.ini
+    
+    # Step 7: Pull the latest code from GitHub on the EC2 instances using Ansible
+    - name: Update code on EC2 instances
+      run: |
+        cat <<EOF > deploy-playbook.yml
+        ---
+        - name: Deploy code to EC2 instances
+          hosts: ec2_instances
+          become: yes
+          tasks:
+            - name: Pull latest code from GitHub
+              git:
+                repo: "https://github.com/hemal-bhatti/simple-node-react-app.git"
+                dest: "/var/www/simple-node-react-app"
+                version: "main"
+                force: yes
+                update: yes
+                accept_hostkey: yes
+            - name: Fix directory ownership
+              file:
+                path: /var/www/simple-node-react-app
+                owner: ubuntu
+                group: ubuntu
+                recurse: yes
+            - name: Install NPM dependencies
+              become_user: ubuntu
+              shell: |
+                export NVM_DIR="/home/ubuntu/.nvm"
+                [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+                cd /var/www/simple-node-react-app/simple-backend
+                npm install
+              args:
+                executable: /bin/bash
+            - name: Restart PM2 with ecosystem.config.js
+              become_user: ubuntu
+              shell: |
+                export NVM_DIR="/home/ubuntu/.nvm"
+                [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+                cd /var/www/simple-node-react-app/simple-backend
+                pm2 restart ecosystem.config.js --update-env
+              args:
+                executable: /bin/bash
+
+            - name: run a script file
+              become_user: ubuntu
+              shell: |
+                cd "/home/ubuntu/hemal"
+                sudo bash script.sh
+        EOF
+
+        ansible-playbook -i inventory.ini deploy-playbook.yml
+
+
+
+    # Step 8: Fetch EC2 instances (Auto Scaling Group instances)
     - name: Fetch EC2 instances from Auto Scaling Group
       id: fetch_instances
       run: |
@@ -68,12 +135,12 @@ jobs:
           echo "ansible_ssh_private_key_file=./hemal-laptop.pem" >> inventory.ini
           echo "ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" >> inventory.ini
 
-    # Step 7: Set up Ansible inventory file
+    # Step 9: Set up Ansible inventory file
     - name: Set up Ansible inventory file
       run: |
         cat inventory.ini
     
-    # Step 8: Pull the latest code from GitHub on the EC2 instances using Ansible
+    # Step 10: Pull the latest code from GitHub on the EC2 instances using Ansible
     - name: Update code on EC2 instances
       run: |
         cat <<EOF > deploy-playbook.yml
@@ -118,7 +185,7 @@ jobs:
 
         ansible-playbook -i inventory.ini deploy-playbook.yml
 
-    # Step 9: Clean up any temporary files or artifacts if necessary
+    # Step 11: Clean up any temporary files or artifacts if necessary
     - name: Clean up
       run: |
         rm -f deploy-playbook.yml inventory.ini ec2_key.pem
