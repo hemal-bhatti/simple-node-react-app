@@ -123,15 +123,39 @@ jobs:
           --query 'ImageId' \
           --output text)
         echo "AMI ID: $AMI_ID"
-        echo "ami_id=$AMI_ID" >> $GITHUB_ENV
 
       # attach a this ami to launch template
-    - name: Attach AMI to launch template 
+    - name: wait for ami to be available 
       run: |
-        echo $GITHUB_ENV
-        
+       aws ec2 wait image-available --image-ids "$AMI_ID" --region "$REGION"
 
+    - name: fetch latest launch template version
+      id: fetch_latest_version
+      run: |
+        LAUNCH_TEMPLATE_NAME="hemal-lt"
+        REGION="ap-south-1"
+        LATEST_VERSION=$(aws ec2 describe-launch-templates \
+        --launch-template-names "$LAUNCH_TEMPLATE_NAME" \
+        --query "LaunchTemplates[0].LatestVersionNumber" \
+        --output text \
+        --region "$REGION")
 
+    
+    - name: Attach AMI to launch template
+      run: |
+        NEW_VERSION=$(aws ec2 create-launch-template-version \
+          --launch-template-name hemal-lt \
+          --source-version "$LATEST_VERSION" \
+          --launch-template-data '{"ImageId":"'"$AMI_ID"'"}' \
+          --region ap-south-1)
+
+    - name: Set the new version as default
+      run: |
+        aws ec2 modify-launch-template \
+            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+            --default-version "$NEW_VERSION" \
+            --region "$REGION"
+            
 
     # Step 8: Fetch EC2 instances (Auto Scaling Group instances)
     - name: Fetch EC2 instances from Auto Scaling Group
