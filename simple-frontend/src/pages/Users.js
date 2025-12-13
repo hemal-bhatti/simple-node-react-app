@@ -7,7 +7,7 @@ function Users() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    axios.get('http://13.235.86.57:5000/api/users')
+    axios.get('http://localhost:5000/api/users')
       .then(res => {
         setUsers(res.data);
         setLoading(false);
