@@ -128,7 +128,9 @@ jobs:
       # attach a this ami to launch template
     - name: wait for ami to be available 
       run: |
-       aws ec2 wait image-available --image-ids "$AMI_ID" --region "$REGION"
+        echo "Waiting for AMI $AMI_ID to be available..."
+        aws ec2 wait image-available --image-ids "$AMI_ID" --region ap-south-1
+        echo "AMI $AMI_ID is now available."
 
     - name: fetch latest launch template version
       id: fetch_latest_version
