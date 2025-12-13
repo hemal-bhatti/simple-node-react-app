@@ -122,15 +122,15 @@ jobs:
           --name "$AMI_NAME" \
           --no-reboot \
           --query 'ImageId' \
-          --output text)
+          --output text) >> $GITHUB_ENV
         echo "AMI ID: $AMI_ID"
 
       # attach a this ami to launch template
     - name: wait for ami to be available
       run: |
-        echo $AMI_ID
+        echo $GITHUB_ENV
         echo "Waiting for AMI $AMI_ID to be available..."
-        aws ec2 wait image-available --image-ids "$AMI_ID"
+        aws ec2 wait image-available --image-ids "$GITHUB_ENV"
         echo "AMI $AMI_ID is now available."
 
     - name: fetch latest launch template version
