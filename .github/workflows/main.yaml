@@ -85,14 +85,14 @@ jobs:
             - name: Pull latest code from GitHub
               git:
                 repo: "https://github.com/hemal-bhatti/simple-node-react-app.git"
-                dest: "/var/www/simple-node-react"
+                dest: "/var/www/simple-node-react-app"
                 version: "main"
                 force: yes
                 update: yes
                 accept_hostkey: yes
             - name: Fix directory ownership
               file:
-                path: /var/www/simple-node-react
+                path: /var/www/simple-node-react-app
                 owner: ubuntu
                 group: ubuntu
                 recurse: yes
@@ -101,7 +101,7 @@ jobs:
               shell: |
                 export NVM_DIR="/home/ubuntu/.nvm"
                 [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                cd /var/www/simple-node-react/simple-backend
+                cd /var/www/simple-node-react-app/simple-backend
                 npm install
               args:
                 executable: /bin/bash
@@ -110,7 +110,7 @@ jobs:
               shell: |
                 export NVM_DIR="/home/ubuntu/.nvm"
                 [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                cd /var/www/simple-node-react/simple-backend
+                cd /var/www/simple-node-react-app/simple-backend
                 pm2 restart ecosystem.config.js --update-env
               args:
                 executable: /bin/bash
