@@ -7,10 +7,11 @@ app.use(cors());
 app.use(express.json());
 
 const fakeUsers = [
-  { id: 1, name: 'John Doe', email: 'john@example.com', age: 28 },
-  { id: 2, name: 'Jane Smith', email: 'jane@example.com', age: 34 },
-  { id: 3, name: 'Bob Johnson', email: 'bob@example.com', age: 22 },
-  { id: 4, name: 'Alice Brown', email: 'alice@example.com', age: 29 }
+  {id : 1, name: 'hemal bhatti', email: 'hemal@bhatti.com', age: 20},
+  { id: 2, name: 'John Doe', email: 'john@example.com', age: 28 },
+  { id: 3, name: 'Jane Smith', email: 'jane@example.com', age: 34 },
+  { id: 4, name: 'Bob Johnson', email: 'bob@example.com', age: 22 },
+  { id: 5, name: 'Alice Brown', email: 'alice@example.com', age: 29 }
 ];
 
 app.get('/', (req, res) => {
