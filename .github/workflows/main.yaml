@@ -65,7 +65,7 @@ jobs:
         cat <<EOF > deploy-playbook.yml
         ---
         - name: Deploy code to EC2 instances
-          hosts: ec2_instances
+          hosts: temp_server
           become: yes
           tasks:
             - name: Pull latest code from GitHub
