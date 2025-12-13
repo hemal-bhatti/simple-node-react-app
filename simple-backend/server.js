@@ -13,6 +13,10 @@ const fakeUsers = [
   { id: 4, name: 'Alice Brown', email: 'alice@example.com', age: 29 }
 ];
 
+app.get('/', (req, res) => {
+  res.json({ message: 'Welcome to the simple backend API!' });
+});
+
 // GET /api/users - Fetch all users
 app.get('/api/users', (req, res) => {
   res.json(fakeUsers);
