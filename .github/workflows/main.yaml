@@ -50,7 +50,7 @@ jobs:
       run: |
         echo "[temp_server]" > inventory.ini
         aws ec2 describe-instances \
-        --region ap-south-1 \ 
+        --region ap-south-1 \
         --instance-ids i-07faed5b39659712b \
         --query 'Reservations[*].Instances[*].PublicIpAddress' \
         --output text >> inventory.ini
