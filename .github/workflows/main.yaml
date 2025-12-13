@@ -55,12 +55,20 @@ jobs:
         --query 'Reservations[*].Instances[*].PublicIpAddress' \
         --output text >> inventory.ini
 
-    - name: Set up Ansible inventory file
+         # Add SSH configuration to inventory
+          echo "" >> inventory.ini
+          echo "[ec2_instances:vars]" >> inventory.ini
+          echo "ansible_user=ubuntu" >> inventory.ini
+          echo "ansible_ssh_private_key_file=./hemal-laptop.pem" >> inventory.ini
+          echo "ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" >> inventory.ini
+
+
+    - name: Set up Ansible inventory file for temporary server
       run: |
         cat inventory.ini
     
     # Step 7: Pull the latest code from GitHub on the EC2 instances using Ansible
-    - name: Update code on EC2 instances
+    - name: Update code on EC2 instances on temporary server
       run: |
         cat <<EOF > deploy-playbook.yml
         ---
@@ -128,7 +136,7 @@ jobs:
           --query "Reservations[].Instances[].PublicIpAddress" \
           --output text | tr -s '\t ' '\n' >> inventory.ini
           
-          # Add SSH configuration to inventory with bastion host
+          # Add SSH configuration to inventory
           echo "" >> inventory.ini
           echo "[ec2_instances:vars]" >> inventory.ini
           echo "ansible_user=ubuntu" >> inventory.ini
