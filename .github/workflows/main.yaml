@@ -116,9 +116,10 @@ jobs:
     # Step 7.1: create ami of this temp server
     - name: create a ami from this temp temp_server
       run: |
+        AMI_NAME="hemal-ami-$(date +%Y%m%d%H%M%S)"
         AMI_ID=$(aws ec2 create-image \
           --instance-id i-07faed5b39659712b \
-          --name "simple-node-react-app-ami" \
+          --name "$AMI_NAME" \
           --no-reboot \
           --query 'ImageId' \
           --output text)
