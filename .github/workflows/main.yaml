@@ -1,297 +1,41 @@
-name: EC2 Deploy with Ansible
+name: Build and Push to ECR
 
 on:
   push:
-    branches:
-      - main  # You can modify this to trigger on different branches if needed.
+    branches: ['main']
+
+env:
+  AWS_REGION: 'ap-south-1'
+  ECR_REPOSITORY: 'hemal/backend'
+  ACCOUNT_ID: '073015045369'
+  ROLE_NAME: 'action-github'
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-    
+
     steps:
-    # Step 1: Checkout the code repository
-    - name: Checkout repository
-      uses: actions/checkout@v2
-    
-    # Step 2: Set up AWS CLI for accessing EC2 instances
-    - name: Set up AWS CLI
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
-    
-    # Step 3: Install Ansible
-    - name: Install Ansible
-      run: |
-        sudo apt update
-        sudo apt install -y ansible
-    
-    # Step 4: Set up SSH key for Ansible
-    - name: Set up SSH key
-      run: |
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > hemal-laptop.pem
-        chmod 600 hemal-laptop.pem
-    
-    # Step 5: Install Node.js using nvm
-    - name: Install Node.js and NPM
-      run: |
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        nvm install 22.17.0
-        nvm use 22.17.0
-        node --version
-        npm --version
-    
-    # 6. fetch temp server using AWS CLI
-    - name: Fetch temporary server details
-      run: |
-        echo "[temp_server]" > inventory.ini
-        aws ec2 describe-instances \
-        --region ap-south-1 \
-        --instance-ids i-07faed5b39659712b \
-        --query 'Reservations[*].Instances[*].PublicIpAddress' \
-        --output text >> inventory.ini
+      - name: Checkout
+        uses: actions/checkout@v4
 
-         # Add SSH configuration to inventory
-          echo "" >> inventory.ini
-          echo "[temp_server:vars]" >> inventory.ini
-          echo "ansible_user=ubuntu" >> inventory.ini
-          echo "ansible_ssh_private_key_file=./hemal-laptop.pem" >> inventory.ini
-          echo "ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" >> inventory.ini
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.ACCOUNT_ID }}:role/${{ env.ROLE_NAME }}
+          role-session-name: github_action_session
+          aws-region: ${{ env.AWS_REGION }}
 
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Set up Ansible inventory file for temporary server
-      run: |
-        cat inventory.ini
-    
-    # Step 7: Pull the latest code from GitHub on the EC2 instances using Ansible
-    - name: Update code on EC2 instances on temporary server
-      run: |
-        cat <<EOF > deploy-playbook.yml
-        ---
-        - name: Deploy code to EC2 instances
-          hosts: temp_server
-          become: yes
-          tasks:
-            - name: Pull latest code from GitHub
-              git:
-                repo: "https://github.com/hemal-bhatti/simple-node-react-app.git"
-                dest: "/var/www/simple-node-react-app"
-                version: "main"
-                force: yes
-                update: yes
-                accept_hostkey: yes
-            - name: Fix directory ownership
-              file:
-                path: /var/www/simple-node-react-app
-                owner: ubuntu
-                group: ubuntu
-                recurse: yes
-            - name: Install NPM dependencies
-              become_user: ubuntu
-              shell: |
-                export NVM_DIR="/home/ubuntu/.nvm"
-                [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                cd /var/www/simple-node-react-app/simple-backend
-                npm install
-              args:
-                executable: /bin/bash
-            - name: Restart PM2 with ecosystem.config.js
-              become_user: ubuntu
-              shell: |
-                export NVM_DIR="/home/ubuntu/.nvm"
-                [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                cd /var/www/simple-node-react-app/simple-backend
-                pm2 restart ecosystem.config.js --update-env
-              args:
-                executable: /bin/bash
-
-        EOF
-
-        ansible-playbook -i inventory.ini deploy-playbook.yml
-
-
-    - name: run a script
-      run: |
-        INSTANCE_ID="i-07faed5b39659712b"       # EC2 instance ID
-        LAUNCH_TEMPLATE_NAME="hemal-lt"   # Launch template name
-        AMI_NAME="hemal-ami-$(date +%Y%m%d%H%M%S)"   # AMI name with timestamp
-        REGION="ap-south-1"                         # AWS region
-
-        echo "=== Step 1: Creating AMI from instance: $INSTANCE_ID ==="
-        AMI_ID=$(aws ec2 create-image \
-            --instance-id "$INSTANCE_ID" \
-            --name "$AMI_NAME" \
-            --description "Auto AMI created on $(date)" \
-            --no-reboot \
-            --region "$REGION" \
-            --output text)
-
-        echo "AMI creation initiated: $AMI_ID"
-
-        echo "=== Waiting for AMI to become available ==="
-        aws ec2 wait image-available --image-ids "$AMI_ID" --region "$REGION"
-        echo "AMI is now available: $AMI_ID"
-
-
-        echo "=== Step 2: Fetching latest Launch Template version ==="
-        LATEST_VERSION=$(aws ec2 describe-launch-templates \
-            --launch-template-names "$LAUNCH_TEMPLATE_NAME" \
-            --query "LaunchTemplates[0].LatestVersionNumber" \
-            --output text \
-            --region "$REGION")
-
-        echo "Latest launch template version: $LATEST_VERSION"
-
-
-        echo "=== Step 3: Creating new launch template version with AMI: $AMI_ID ==="
-        NEW_VERSION=$(aws ec2 create-launch-template-version \
-            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-            --source-version "$LATEST_VERSION" \
-            --version-description "Updated AMI $AMI_ID on $(date)" \
-            --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-            --query 'LaunchTemplateVersion.VersionNumber' \
-            --output text \
-            --region "$REGION")
-
-        echo "New launch template version created: $NEW_VERSION"
-
-
-        echo "=== Step 4: Setting the new version as default ==="
-        aws ec2 modify-launch-template \
-            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-            --default-version "$NEW_VERSION" \
-            --region "$REGION"
-
-        echo "Default launch template updated to version: $NEW_VERSION"
-
-        echo "=== All steps completed successfully ==="
-
-    # # Step 7.1: create ami of this temp server
-    # - name: create a ami from this temp temp_server
-    #   run: |
-    #     AMI_NAME="hemal-ami-$(date +%Y%m%d%H%M%S)"
-    #     AMI_ID=$(aws ec2 create-image \
-    #       --instance-id i-07faed5b39659712b \
-    #       --name "$AMI_NAME" \
-    #       --no-reboot \
-    #       --query 'ImageId' \
-    #       --output text) >> $GITHUB_ENV
-    #     echo "AMI ID: $AMI_ID"
-
-    #   # attach a this ami to launch template
-    # - name: wait for ami to be available
-    #   run: |
-    #     echo $GITHUB_ENV
-    #     echo "Waiting for AMI $AMI_ID to be available..."
-    #     aws ec2 wait image-available --image-ids "$GITHUB_ENV"
-    #     echo "AMI $AMI_ID is now available."
-
-    # - name: fetch latest launch template version
-    #   id: fetch_latest_version
-    #   run: |
-    #     LAUNCH_TEMPLATE_NAME="hemal-lt"
-    #     REGION="ap-south-1"
-    #     LATEST_VERSION=$(aws ec2 describe-launch-templates \
-    #     --launch-template-names "$LAUNCH_TEMPLATE_NAME" \
-    #     --query "LaunchTemplates[0].LatestVersionNumber" \
-    #     --output text \
-    #     --region "$REGION")
-
-    
-    # - name: Attach AMI to launch template
-    #   run: |
-    #     NEW_VERSION=$(aws ec2 create-launch-template-version \
-    #       --launch-template-name hemal-lt \
-    #       --source-version "$LATEST_VERSION" \
-    #       --launch-template-data '{"ImageId":"'"$AMI_ID"'"}' \
-    #       --region ap-south-1)
-
-    # - name: Set the new version as default
-    #   run: |
-    #     aws ec2 modify-launch-template \
-    #         --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-    #         --default-version "$NEW_VERSION" \
-    #         --region "$REGION"
-            
-
-    # Step 8: Fetch EC2 instances (Auto Scaling Group instances)
-    - name: Fetch EC2 instances from Auto Scaling Group
-      id: fetch_instances
-      run: |
-        # Assuming you are using an Auto Scaling Group with tags to identify the instances
-          echo "[ec2_instances]" > inventory.ini
-          aws ec2 describe-instances \
-             --instance-ids $(aws autoscaling describe-auto-scaling-groups \
-             --region ap-south-1 \
-             --auto-scaling-group-names hemal-asg \
-             --query "AutoScalingGroups[].Instances[].InstanceId" \
-             --output text) \
-          --region ap-south-1 \
-          --query "Reservations[].Instances[].PublicIpAddress" \
-          --output text | tr -s '\t ' '\n' >> inventory.ini
-          
-          # Add SSH configuration to inventory
-          echo "" >> inventory.ini
-          echo "[ec2_instances:vars]" >> inventory.ini
-          echo "ansible_user=ubuntu" >> inventory.ini
-          echo "ansible_ssh_private_key_file=./hemal-laptop.pem" >> inventory.ini
-          echo "ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" >> inventory.ini
-
-    # Step 9: Set up Ansible inventory file
-    - name: Set up Ansible inventory file
-      run: |
-        cat inventory.ini
-    
-    # Step 10: Pull the latest code from GitHub on the EC2 instances using Ansible
-    - name: Update code on EC2 instances
-      run: |
-        cat <<EOF > deploy-playbook.yml
-        ---
-        - name: Deploy code to EC2 instances
-          hosts: ec2_instances
-          become: yes
-          tasks:
-            - name: Pull latest code from GitHub
-              git:
-                repo: "https://github.com/hemal-bhatti/simple-node-react-app.git"
-                dest: "/var/www/simple-node-react-app"
-                version: "main"
-                force: yes
-                update: yes
-                accept_hostkey: yes
-            - name: Fix directory ownership
-              file:
-                path: /var/www/simple-node-react-app
-                owner: ubuntu
-                group: ubuntu
-                recurse: yes
-            - name: Install NPM dependencies
-              become_user: ubuntu
-              shell: |
-                export NVM_DIR="/home/ubuntu/.nvm"
-                [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                cd /var/www/simple-node-react-app/simple-backend
-                npm install
-              args:
-                executable: /bin/bash
-            - name: Restart PM2 with ecosystem.config.js
-              become_user: ubuntu
-              shell: |
-                export NVM_DIR="/home/ubuntu/.nvm"
-                [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                cd /var/www/simple-node-react-app/simple-backend
-                pm2 restart ecosystem.config.js --update-env
-              args:
-                executable: /bin/bash
-        EOF
-
-        ansible-playbook -i inventory.ini deploy-playbook.yml
-
-    # Step 11: Clean up any temporary files or artifacts if necessary
-    - name: Clean up
-      run: |
-        rm -f deploy-playbook.yml inventory.ini ec2_key.pem
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
