@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  AWS_REGION: 'ap-south-1'
+  AWS_REGION: 'ap-south-1' 
   ECR_REPOSITORY: 'hemal/backend'
   ACCOUNT_ID: '073015045369'
   ROLE_NAME: 'action-github'
